@@ -98,14 +98,23 @@
     <p class="lead">Оберіть соцмережу</p>
 
     <div class="share-list">
-      <button id="threadsDesktop" class="share primary" type="button">Threads</button>
+      <form id="threadsDesktopForm"
+            action="https://www.threads.com/intent/post"
+            method="get"
+            accept-charset="UTF-8"
+            target="_blank"
+            style="margin:0">
+        <input id="threadsText" type="hidden" name="text" value="">
+        <input id="threadsUrl" type="hidden" name="url" value="">
+        <button class="share primary" type="submit">Threads</button>
+      </form>
       <button class="share soon" type="button" disabled>Instagram · скоро</button>
       <button class="share soon" type="button" disabled>TikTok · скоро</button>
       <button class="share soon" type="button" disabled>X · скоро</button>
       <button class="share soon" type="button" disabled>Facebook · скоро</button>
     </div>
 
-    <p class="note">Threads відкриється, а точний текст буде скопійовано в буфер обміну.</p>
+    <p class="note">Threads відкриється одразу з готовою чернеткою поста.</p>
   </section>
 
   <div id="error" class="error"></div>
@@ -156,31 +165,13 @@
   }
 
   const desktopShare = splitShareTextAndUrl(text);
-  let threadsHref =
-    'https://www.threads.com/intent/post?text=' +
-    encodeURIComponent(desktopShare.body);
-  if (desktopShare.url) {
-    threadsHref += '&url=' + encodeURIComponent(desktopShare.url);
-  }
-  const threadsDesktopButton = document.getElementById('threadsDesktop');
 
-  threadsDesktopButton.addEventListener('click', async () => {
-    errorBox.style.display = 'none';
-
-    // Open first, while we still have the user's click, so popup blockers do not interfere.
-    const composer = window.open('https://www.threads.com/intent/post', '_blank', 'noopener,noreferrer');
-
-    try {
-      await navigator.clipboard.writeText(text);
-      const note = document.querySelector('#desktop .note');
-      if (note) {
-        note.textContent = 'Текст скопійовано. У Threads вставте його через Ctrl+V та натисніть Post.';
-      }
-    } catch (_) {
-      if (composer) composer.close();
-      showError('Не вдалося скопіювати текст автоматично. Дозвольте доступ до буфера обміну та спробуйте ще раз.');
-    }
-  });
+  // Let the browser itself perform a standards-based UTF-8 GET form submission.
+  // This avoids hand-building a long query string in JavaScript.
+  const threadsTextInput = document.getElementById('threadsText');
+  const threadsUrlInput = document.getElementById('threadsUrl');
+  threadsTextInput.value = desktopShare.body;
+  threadsUrlInput.value = desktopShare.url;
 
   if (!isMobile) {
     document.getElementById('desktop').style.display = 'block';
@@ -214,11 +205,12 @@
     }
 
     try {
-      // Keep ordinary Unicode text. The previous U+2028/U+2029 experiment
-      // rendered as visible boxes in Threads. Use conventional Windows/Android
-      // CRLF line endings instead and let the receiving app handle plain text.
-      const mobileText = text
-        .replace(/\r\n?/g, '\n')
+      // Threads on Android tends to collapse completely empty lines coming
+      // through the system share flow. Keep ordinary newlines, but place an
+      // invisible zero-width space on blank separator lines.
+      const normalized = text.replace(/\r\n?/g, '\n');
+      const mobileText = normalized
+        .replace(/\n{2,}/g, '\n\u200B\n')
         .replace(/\n/g, '\r\n');
 
       await navigator.share({ text: mobileText });
