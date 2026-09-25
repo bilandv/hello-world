@@ -6,7 +6,6 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#111111">
   <title>Поділитися результатом ШИФР</title>
-  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -23,9 +22,7 @@
       justify-content: center;
       padding: 24px 16px;
     }
-    main {
-      width: min(100%, 520px);
-    }
+    main { width: min(100%, 520px); }
     h1 {
       margin: 0 0 10px;
       font-size: 28px;
@@ -39,11 +36,8 @@
       font-size: 16px;
       line-height: 1.4;
     }
-    .share-list {
-      display: grid;
-      gap: 12px;
-    }
-    button, a.share {
+    .share-list { display: grid; gap: 12px; }
+    a.share, button.share {
       width: 100%;
       min-height: 58px;
       border: 0;
@@ -58,10 +52,7 @@
       justify-content: center;
       text-decoration: none;
     }
-    #threads {
-      background: #fff;
-      color: #111;
-    }
+    .primary { background: #fff; color: #111; }
     .soon {
       background: #232323;
       color: #777;
@@ -72,7 +63,7 @@
       font-size: 13px;
       line-height: 1.45;
       text-align: center;
-      opacity: .5;
+      opacity: .56;
     }
     .error {
       display: none;
@@ -84,23 +75,54 @@
       font-size: 14px;
       line-height: 1.4;
     }
+    #mobile, #desktop { display: none; }
+    .spinner {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto 18px;
+      border: 3px solid #444;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #mobileFallback { display: none; }
   </style>
 </head>
 <body>
 <main>
-  <h1>📤 Поділитися результатом</h1>
-  <p class="lead">Оберіть соцмережу</p>
+  <section id="mobile">
+    <div id="mobileAuto">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>📤 Поділитися результатом</h1>
+      <p class="lead">Відкриваємо меню поширення…</p>
+    </div>
 
-  <div class="share-list">
-    <button id="threads" type="button">Threads</button>
-    <button class="soon" type="button" disabled>Instagram · скоро</button>
-    <button class="soon" type="button" disabled>TikTok · скоро</button>
-    <button class="soon" type="button" disabled>X · скоро</button>
-    <button class="soon" type="button" disabled>Facebook · скоро</button>
-  </div>
+    <div id="mobileFallback">
+      <h1>📤 Поділитися результатом</h1>
+      <p class="lead">Оберіть соцмережу в системному меню</p>
+      <div class="share-list">
+        <a id="androidShare" class="share primary" href="#">Відкрити меню поширення</a>
+        <button id="webShare" class="share primary" type="button" style="display:none">Відкрити меню поширення</button>
+      </div>
+      <p class="note">У меню виберіть Threads, Instagram, X, Facebook або інший застосунок.</p>
+    </div>
+  </section>
+
+  <section id="desktop">
+    <h1>📤 Поділитися результатом</h1>
+    <p class="lead">Оберіть соцмережу</p>
+    <div class="share-list">
+      <a id="threadsDesktop" class="share primary" target="_blank" rel="noopener noreferrer">Threads</a>
+      <button class="share soon" type="button" disabled>Instagram · скоро</button>
+      <button class="share soon" type="button" disabled>TikTok · скоро</button>
+      <button class="share soon" type="button" disabled>X · скоро</button>
+      <button class="share soon" type="button" disabled>Facebook · скоро</button>
+    </div>
+    <p class="note">Threads відкриється з готовою чернеткою поста.</p>
+  </section>
 
   <div id="error" class="error"></div>
-  <p class="note">Після натискання Threads відкриється готова чернетка поста.</p>
 </main>
 
 <script>
@@ -112,67 +134,97 @@
     try {
       const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
       const bytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
-      return new TextDecoder('utf-8').decode(bytes);
+      return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     } catch (_) {
       return '';
     }
   }
 
   const text = decodeBase64Url(q.get('t')) || q.get('text') || '';
-  const threadsUrl = 'https://www.threads.com/intent/post?text=' + encodeURIComponent(text);
+  const ua = navigator.userAgent || '';
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isMobile = isAndroid || isIOS;
   const errorBox = document.getElementById('error');
-  const threadsButton = document.getElementById('threads');
 
   function showError(message) {
     errorBox.textContent = message;
     errorBox.style.display = 'block';
   }
 
-  try {
-    const tg = window.Telegram && window.Telegram.WebApp;
-    if (tg) {
-      tg.ready();
-      if (typeof tg.expand === 'function') tg.expand();
-    }
-  } catch (_) {}
-
   if (!text) {
-    threadsButton.disabled = true;
-    threadsButton.classList.add('soon');
+    document.getElementById('desktop').style.display = 'block';
     showError('Не вдалося отримати текст результату. Поверніться в бот і відкрийте поширення ще раз.');
     return;
   }
 
-  threadsButton.addEventListener('click', () => {
-    errorBox.style.display = 'none';
+  const threads = new URL('https://www.threads.com/intent/post');
+  threads.searchParams.set('text', text);
+  document.getElementById('threadsDesktop').href = threads.toString();
 
+  if (!isMobile) {
+    document.getElementById('desktop').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('mobile').style.display = 'block';
+
+  const mobileAuto = document.getElementById('mobileAuto');
+  const mobileFallback = document.getElementById('mobileFallback');
+  const androidShare = document.getElementById('androidShare');
+  const webShare = document.getElementById('webShare');
+
+  const androidIntent =
+    'intent:#Intent;' +
+    'action=android.intent.action.SEND;' +
+    'type=text/plain;' +
+    'S.android.intent.extra.TEXT=' + encodeURIComponent(text) + ';' +
+    'end';
+
+  androidShare.href = androidIntent;
+
+  let leftPage = false;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) leftPage = true;
+  });
+  window.addEventListener('pagehide', () => {
+    leftPage = true;
+  });
+
+  function showMobileFallback() {
+    mobileAuto.style.display = 'none';
+    mobileFallback.style.display = 'block';
+
+    if (!isAndroid && typeof navigator.share === 'function') {
+      androidShare.style.display = 'none';
+      webShare.style.display = 'flex';
+    }
+  }
+
+  webShare.addEventListener('click', async () => {
     try {
-      const tg = window.Telegram && window.Telegram.WebApp;
-
-      if (tg && typeof tg.openLink === 'function') {
-        const platform = (tg.platform || '').toLowerCase();
-
-        if (platform === 'android') {
-          // Important: force a real browser first. If Telegram hands the HTTPS
-          // URL directly to Android, Threads may intercept it as an App Link
-          // and open only the feed, dropping the composer parameters.
-          tg.openLink(threadsUrl, {
-            try_instant_view: false,
-            try_browser: 'chrome'
-          });
-        } else {
-          tg.openLink(threadsUrl, { try_instant_view: false });
-        }
-        return;
+      await navigator.share({ text });
+    } catch (err) {
+      if (err && err.name !== 'AbortError') {
+        showError('Не вдалося відкрити системне меню поширення.');
       }
-    } catch (_) {}
-
-    try {
-      window.open(threadsUrl, '_blank', 'noopener,noreferrer');
-    } catch (_) {
-      location.href = threadsUrl;
     }
   });
+
+  // Best-effort zero-extra-tap path on Android. Telegram's normal in-app
+  // browser supports intent:// links; if the browser still requires a fresh
+  // user gesture, the explicit button appears immediately as a fallback.
+  if (isAndroid) {
+    try {
+      location.href = androidIntent;
+    } catch (_) {}
+    setTimeout(() => {
+      if (!leftPage && !document.hidden) showMobileFallback();
+    }, 650);
+  } else {
+    // iOS Web Share always requires a fresh user activation.
+    showMobileFallback();
+  }
 })();
 </script>
 </body>
