@@ -150,7 +150,19 @@
       const tg = window.Telegram && window.Telegram.WebApp;
 
       if (tg && typeof tg.openLink === 'function') {
-        tg.openLink(threadsUrl, { try_instant_view: false });
+        const platform = (tg.platform || '').toLowerCase();
+
+        if (platform === 'android') {
+          // Important: force a real browser first. If Telegram hands the HTTPS
+          // URL directly to Android, Threads may intercept it as an App Link
+          // and open only the feed, dropping the composer parameters.
+          tg.openLink(threadsUrl, {
+            try_instant_view: false,
+            try_browser: 'chrome'
+          });
+        } else {
+          tg.openLink(threadsUrl, { try_instant_view: false });
+        }
         return;
       }
     } catch (_) {}
