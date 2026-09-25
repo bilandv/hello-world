@@ -142,9 +142,27 @@
     return;
   }
 
-  const threads = new URL('https://www.threads.com/intent/post');
-  threads.searchParams.set('text', text);
-  document.getElementById('threadsDesktop').href = threads.toString();
+  function splitShareTextAndUrl(source) {
+    const match = source.match(/https:\/\/t\.me\/[^\s]+/u);
+    if (!match) return { body: source, url: '' };
+    const url = match[0];
+    const body = source
+      .replace(url, '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n[ \t]+/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    return { body, url };
+  }
+
+  const desktopShare = splitShareTextAndUrl(text);
+  let threadsHref =
+    'https://www.threads.com/intent/post?text=' +
+    encodeURIComponent(desktopShare.body);
+  if (desktopShare.url) {
+    threadsHref += '&url=' + encodeURIComponent(desktopShare.url);
+  }
+  document.getElementById('threadsDesktop').href = threadsHref;
 
   if (!isMobile) {
     document.getElementById('desktop').style.display = 'block';
@@ -178,7 +196,15 @@
     }
 
     try {
-      await navigator.share({ text });
+      // Threads Android currently flattens ordinary LF newlines received from
+      // the Android share flow. Use Unicode's explicit line/paragraph
+      // separators for a structured plain-text payload.
+      const normalized = text.replace(/\r\n?/g, '\n');
+      const mobileText = normalized
+        .replace(/\n\n/g, '\u2029\u2063\u2029')
+        .replace(/\n/g, '\u2028');
+
+      await navigator.share({ text: mobileText });
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       showError('Не вдалося відкрити системне меню поширення.');
