@@ -37,9 +37,9 @@
       line-height: 1.4;
     }
     .share-list { display: grid; gap: 12px; }
-    a.share, button.share {
+    button.share, a.share {
       width: 100%;
-      min-height: 58px;
+      min-height: 60px;
       border: 0;
       border-radius: 16px;
       padding: 0 18px;
@@ -76,42 +76,25 @@
       line-height: 1.4;
     }
     #mobile, #desktop { display: none; }
-    .spinner {
-      width: 34px;
-      height: 34px;
-      margin: 0 auto 18px;
-      border: 3px solid #444;
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .75s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #mobileFallback { display: none; }
   </style>
 </head>
 <body>
 <main>
   <section id="mobile">
-    <div id="mobileAuto">
-      <div class="spinner" aria-hidden="true"></div>
-      <h1>📤 Поділитися результатом</h1>
-      <p class="lead">Відкриваємо меню поширення…</p>
+    <h1>📤 Поділитися результатом</h1>
+    <p class="lead">Натисніть кнопку нижче та оберіть соцмережу</p>
+
+    <div class="share-list">
+      <button id="systemShare" class="share primary" type="button">📤 Поділитися</button>
     </div>
 
-    <div id="mobileFallback">
-      <h1>📤 Поділитися результатом</h1>
-      <p class="lead">Оберіть соцмережу в системному меню</p>
-      <div class="share-list">
-        <a id="androidShare" class="share primary" href="#">Відкрити меню поширення</a>
-        <button id="webShare" class="share primary" type="button" style="display:none">Відкрити меню поширення</button>
-      </div>
-      <p class="note">У меню виберіть Threads, Instagram, X, Facebook або інший застосунок.</p>
-    </div>
+    <p class="note">У системному меню виберіть Threads, Instagram, X, Facebook або інший застосунок.</p>
   </section>
 
   <section id="desktop">
     <h1>📤 Поділитися результатом</h1>
     <p class="lead">Оберіть соцмережу</p>
+
     <div class="share-list">
       <a id="threadsDesktop" class="share primary" target="_blank" rel="noopener noreferrer">Threads</a>
       <button class="share soon" type="button" disabled>Instagram · скоро</button>
@@ -119,6 +102,7 @@
       <button class="share soon" type="button" disabled>X · скоро</button>
       <button class="share soon" type="button" disabled>Facebook · скоро</button>
     </div>
+
     <p class="note">Threads відкриється з готовою чернеткою поста.</p>
   </section>
 
@@ -142,18 +126,16 @@
 
   const text = decodeBase64Url(q.get('t')) || q.get('text') || '';
   const ua = navigator.userAgent || '';
-  const isAndroid = /Android/i.test(ua);
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
-  const isMobile = isAndroid || isIOS;
-  const errorBox = document.getElementById('error');
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
 
+  const errorBox = document.getElementById('error');
   function showError(message) {
     errorBox.textContent = message;
     errorBox.style.display = 'block';
   }
 
   if (!text) {
-    document.getElementById('desktop').style.display = 'block';
+    document.getElementById(isMobile ? 'mobile' : 'desktop').style.display = 'block';
     showError('Не вдалося отримати текст результату. Поверніться в бот і відкрийте поширення ще раз.');
     return;
   }
@@ -169,62 +151,23 @@
 
   document.getElementById('mobile').style.display = 'block';
 
-  const mobileAuto = document.getElementById('mobileAuto');
-  const mobileFallback = document.getElementById('mobileFallback');
-  const androidShare = document.getElementById('androidShare');
-  const webShare = document.getElementById('webShare');
+  const shareButton = document.getElementById('systemShare');
 
-  const androidIntent =
-    'intent:#Intent;' +
-    'action=android.intent.action.SEND;' +
-    'type=text/plain;' +
-    'S.android.intent.extra.TEXT=' + encodeURIComponent(text) + ';' +
-    'end';
+  shareButton.addEventListener('click', async () => {
+    errorBox.style.display = 'none';
 
-  androidShare.href = androidIntent;
-
-  let leftPage = false;
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) leftPage = true;
-  });
-  window.addEventListener('pagehide', () => {
-    leftPage = true;
-  });
-
-  function showMobileFallback() {
-    mobileAuto.style.display = 'none';
-    mobileFallback.style.display = 'block';
-
-    if (!isAndroid && typeof navigator.share === 'function') {
-      androidShare.style.display = 'none';
-      webShare.style.display = 'flex';
+    if (typeof navigator.share !== 'function') {
+      showError('На цьому екрані системне меню поширення недоступне. Відкрийте сторінку у звичайному браузері та спробуйте ще раз.');
+      return;
     }
-  }
 
-  webShare.addEventListener('click', async () => {
     try {
       await navigator.share({ text });
     } catch (err) {
-      if (err && err.name !== 'AbortError') {
-        showError('Не вдалося відкрити системне меню поширення.');
-      }
+      if (err && err.name === 'AbortError') return;
+      showError('Не вдалося відкрити системне меню поширення.');
     }
   });
-
-  // Best-effort zero-extra-tap path on Android. Telegram's normal in-app
-  // browser supports intent:// links; if the browser still requires a fresh
-  // user gesture, the explicit button appears immediately as a fallback.
-  if (isAndroid) {
-    try {
-      location.href = androidIntent;
-    } catch (_) {}
-    setTimeout(() => {
-      if (!leftPage && !document.hidden) showMobileFallback();
-    }, 650);
-  } else {
-    // iOS Web Share always requires a fresh user activation.
-    showMobileFallback();
-  }
 })();
 </script>
 </body>
