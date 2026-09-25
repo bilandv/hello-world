@@ -97,14 +97,14 @@
     <p class="lead">Оберіть соцмережу</p>
 
     <div class="share-list">
-      <a id="threadsDesktop" class="share primary" target="_blank" rel="noopener noreferrer">Threads</a>
+      <button id="threadsDesktop" class="share primary" type="button">Threads</button>
       <button class="share soon" type="button" disabled>Instagram · скоро</button>
       <button class="share soon" type="button" disabled>TikTok · скоро</button>
       <button class="share soon" type="button" disabled>X · скоро</button>
       <button class="share soon" type="button" disabled>Facebook · скоро</button>
     </div>
 
-    <p class="note">Threads відкриється з готовою чернеткою поста.</p>
+    <p class="note">Threads відкриється, а точний текст буде скопійовано в буфер обміну.</p>
   </section>
 
   <div id="error" class="error"></div>
@@ -161,7 +161,25 @@
   if (desktopShare.url) {
     threadsHref += '&url=' + encodeURIComponent(desktopShare.url);
   }
-  document.getElementById('threadsDesktop').href = threadsHref;
+  const threadsDesktopButton = document.getElementById('threadsDesktop');
+
+  threadsDesktopButton.addEventListener('click', async () => {
+    errorBox.style.display = 'none';
+
+    // Open first, while we still have the user's click, so popup blockers do not interfere.
+    const composer = window.open('https://www.threads.com/intent/post', '_blank', 'noopener,noreferrer');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      const note = document.querySelector('#desktop .note');
+      if (note) {
+        note.textContent = 'Текст скопійовано. У Threads вставте його через Ctrl+V та натисніть Post.';
+      }
+    } catch (_) {
+      if (composer) composer.close();
+      showError('Не вдалося скопіювати текст автоматично. Дозвольте доступ до буфера обміну та спробуйте ще раз.');
+    }
+  });
 
   if (!isMobile) {
     document.getElementById('desktop').style.display = 'block';
@@ -195,13 +213,12 @@
     }
 
     try {
-      // Threads Android currently flattens ordinary LF newlines received from
-      // the Android share flow. Use Unicode's explicit line/paragraph
-      // separators for a structured plain-text payload.
-      const normalized = text.replace(/\r\n?/g, '\n');
-      const mobileText = normalized
-        .replace(/\n\n/g, '\u2029\u2063\u2029')
-        .replace(/\n/g, '\u2028');
+      // Keep ordinary Unicode text. The previous U+2028/U+2029 experiment
+      // rendered as visible boxes in Threads. Use conventional Windows/Android
+      // CRLF line endings instead and let the receiving app handle plain text.
+      const mobileText = text
+        .replace(/\r\n?/g, '\n')
+        .replace(/\n/g, '\r\n');
 
       await navigator.share({ text: mobileText });
     } catch (err) {
