@@ -83,14 +83,28 @@
 <body>
 <main>
   <section id="mobile">
-    <h1>📤 Поділитися результатом</h1>
-    <p class="lead">Натисніть кнопку нижче та оберіть соцмережу</p>
+    <div id="mobileTelegram">
+      <h1>📤 Поділитися результатом</h1>
+      <p class="lead">Натисніть кнопку нижче</p>
 
-    <div class="share-list">
-      <button id="systemShare" class="share primary" type="button">📤 Поділитися</button>
+      <div class="share-list">
+        <button id="systemShare" class="share primary" type="button">📤 Поділитися</button>
+      </div>
+
+      <p class="note">Відкриємо сторінку поширення у браузері.</p>
     </div>
 
-    <p class="note">У системному меню виберіть Threads, Instagram, X, Facebook або інший застосунок.</p>
+    <div id="mobileExternal" style="display:none">
+      <h1>📤 Поділитися результатом</h1>
+      <p class="lead">Оберіть, куди поділитися</p>
+
+      <div class="share-list">
+        <a id="threadsNative" class="share primary" href="#">Threads</a>
+        <button id="otherShare" class="share soon" type="button" style="color:#fff;cursor:pointer">Інші соцмережі</button>
+      </div>
+
+      <p class="note">Для Threads відкриється готова чернетка поста. Для інших застосунків використаємо системне меню.</p>
+    </div>
   </section>
 
   <section id="desktop">
@@ -180,44 +194,71 @@
 
   document.getElementById('mobile').style.display = 'block';
 
+  const isExternalMobile = q.get('external') === '1';
+  const telegramBlock = document.getElementById('mobileTelegram');
+  const externalBlock = document.getElementById('mobileExternal');
+
+  if (isExternalMobile) {
+    telegramBlock.style.display = 'none';
+    externalBlock.style.display = 'block';
+
+    // Threads' own native compose deep link accepts prefilled text.
+    // Passing the text in the deep link avoids Android ACTION_SEND, which is
+    // the path that has been flattening line breaks on this device.
+    const threadsNativeUrl =
+      'barcelona://create?text=' + encodeURIComponent(text);
+
+    const threadsWebFallback =
+      'https://www.threads.com/intent/post?text=' + encodeURIComponent(text);
+
+    const threadsIntent =
+      'intent://create?text=' + encodeURIComponent(text) +
+      '#Intent;scheme=barcelona;package=com.instagram.barcelona;' +
+      'S.browser_fallback_url=' + encodeURIComponent(threadsWebFallback) + ';end';
+
+    const threadsNative = document.getElementById('threadsNative');
+    threadsNative.href = /Android/i.test(ua) ? threadsIntent : threadsNativeUrl;
+
+    const otherShare = document.getElementById('otherShare');
+    otherShare.addEventListener('click', async () => {
+      errorBox.style.display = 'none';
+
+      if (typeof navigator.share !== 'function') {
+        showError('Системне меню поширення недоступне в цьому браузері.');
+        return;
+      }
+
+      try {
+        await navigator.share({ text });
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        showError('Не вдалося відкрити системне меню поширення.');
+      }
+    });
+
+    return;
+  }
+
   const shareButton = document.getElementById('systemShare');
 
-  shareButton.addEventListener('click', async () => {
+  shareButton.addEventListener('click', () => {
     errorBox.style.display = 'none';
 
-    if (typeof navigator.share !== 'function') {
-      // Telegram Android WebView does not expose Web Share.
-      // On the user's click, hand the exact same HTTPS page to Chrome.
-      // There the same button will use navigator.share() normally.
-      try {
-        const tg = window.Telegram && window.Telegram.WebApp;
-        if (tg && typeof tg.openLink === 'function') {
-          tg.openLink(window.location.href, {
-            try_instant_view: false,
-            try_browser: 'chrome'
-          });
-          return;
-        }
-      } catch (_) {}
-
-      showError('Системне меню поширення недоступне всередині Telegram. Відкрийте цю сторінку у браузері.');
-      return;
-    }
-
     try {
-      // Threads on Android tends to collapse completely empty lines coming
-      // through the system share flow. Keep ordinary newlines, but place an
-      // invisible zero-width space on blank separator lines.
-      const normalized = text.replace(/\r\n?/g, '\n');
-      const mobileText = normalized
-        .replace(/\n{2,}/g, '\n\u200B\n')
-        .replace(/\n/g, '\r\n');
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (tg && typeof tg.openLink === 'function') {
+        const externalUrl = new URL(window.location.href);
+        externalUrl.searchParams.set('external', '1');
 
-      await navigator.share({ text: mobileText });
-    } catch (err) {
-      if (err && err.name === 'AbortError') return;
-      showError('Не вдалося відкрити системне меню поширення.');
-    }
+        tg.openLink(externalUrl.toString(), {
+          try_instant_view: false,
+          try_browser: 'chrome'
+        });
+        return;
+      }
+    } catch (_) {}
+
+    showError('Не вдалося відкрити сторінку поширення у браузері.');
   });
 })();
 </script>
