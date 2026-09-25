@@ -6,6 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#111111">
   <title>Поділитися результатом ШИФР</title>
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -157,7 +158,21 @@
     errorBox.style.display = 'none';
 
     if (typeof navigator.share !== 'function') {
-      showError('На цьому екрані системне меню поширення недоступне. Відкрийте сторінку у звичайному браузері та спробуйте ще раз.');
+      // Telegram Android WebView does not expose Web Share.
+      // On the user's click, hand the exact same HTTPS page to Chrome.
+      // There the same button will use navigator.share() normally.
+      try {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        if (tg && typeof tg.openLink === 'function') {
+          tg.openLink(window.location.href, {
+            try_instant_view: false,
+            try_browser: 'chrome'
+          });
+          return;
+        }
+      } catch (_) {}
+
+      showError('Системне меню поширення недоступне всередині Telegram. Відкрийте цю сторінку у браузері.');
       return;
     }
 
